@@ -1,0 +1,112 @@
+/* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
+
+/* App stylesheet.
+
+     1. Tailwind v4 base + utilities.
+     2. The framework's prebuilt stylesheet — the theme-token map, the button /
+        elevation flavours, the drawer keyframes, and every preset palette
+        (baked in — no runtime `installPresetTokens()` call needed).
+     3. `@source` — scan the installed framework package so the utility classes
+        its components use are emitted into this app's CSS.
+     4. App-shell layout: the html/body reset that makes this a full-viewport,
+        non-scrolling PWA. This stays the app's — it is layout, not framework. */
+
+@import "tailwindcss";
+@import "@niclaslindstedt/oss-framework/styles.css";
+
+@source "../node_modules/@niclaslindstedt/oss-framework/dist";
+
+/* ── Appearance knob wiring ──────────────────────────────────────────────────
+   The framework's theme engine (`applyUiStyle`) publishes the global look knobs
+   as CSS variables on `<html>`; route the single-width border utilities and the
+   bare `.rounded` radius through them so the Appearance settings bite app-wide
+   (mirrors the contacts reference app — see its styles.css for the rationale). */
+.border {
+  border-width: var(--border-width, 1px);
+}
+.border-x {
+  border-inline-width: var(--border-width, 1px);
+}
+.border-y {
+  border-block-width: var(--border-width, 1px);
+}
+.border-t {
+  border-top-width: var(--border-width, 1px);
+}
+.border-r {
+  border-right-width: var(--border-width, 1px);
+}
+.border-b {
+  border-bottom-width: var(--border-width, 1px);
+}
+.border-l {
+  border-left-width: var(--border-width, 1px);
+}
+.rounded {
+  border-radius: var(--radius-md, 0.375rem);
+}
+
+/* ── Modal backdrop (darkness + blur) ────────────────────────────────────────
+   The framework `Modal` paints its scrim with a single `bg-black/50` element;
+   routing it through two app variables lets a future Appearance tab drive how
+   far the page behind a dialog is dimmed and blurred. Defaults match the
+   framework's original look (50% dim, no blur). */
+:root {
+  --modal-backdrop-darkness: 0.5;
+  --modal-backdrop-blur: 0px;
+}
+.bg-black\/50 {
+  background-color: rgb(0 0 0 / var(--modal-backdrop-darkness, 0.5));
+  -webkit-backdrop-filter: blur(var(--modal-backdrop-blur, 0px));
+  backdrop-filter: blur(var(--modal-backdrop-blur, 0px));
+}
+
+/* ── App-shell layout ────────────────────────────────────────────────────────
+   A full-viewport `100svh` flex app whose panes own their own scroll regions,
+   so the document itself never scrolls. */
+:root {
+  /* The signature monospace stack. The theme engine overrides
+     `--app-font-family` inline once it mounts; this is the pre-paint default. */
+  --app-font-family:
+    "JetBrains Mono", "Fira Code", ui-monospace, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  /* Lock the document down: no page scroll and no overscroll rubber-band, so a
+     horizontal swipe on a row (or a vertical drag at a list's edge) can't drag
+     the whole page around underneath it on mobile. */
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  background: var(--page-bg);
+  color: var(--fg);
+  font-family: var(--app-font-family);
+  font-size: calc(1rem * var(--app-font-scale));
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Installed iOS PWA edge-to-edge under the home indicator: iOS only extends
+   the page under the home indicator when the *root* element carries a fixed
+   `100vh` height. Scoped to iOS via the -webkit-touch-callout probe and to
+   display-mode: standalone so a plain iOS Safari tab keeps `100svh`.
+   (See the contacts reference app for the full rationale.) */
+@supports (-webkit-touch-callout: none) {
+  @media (display-mode: standalone) {
+    html,
+    body {
+      height: 100vh;
+    }
+
+    :root {
+      --app-height: 100vh;
+    }
+  }
+}

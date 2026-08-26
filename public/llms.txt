@@ -1,0 +1,22 @@
+# Vault
+
+> A local-first document vault PWA built on @niclaslindstedt/oss-framework.
+> Important documents and notes live on-device (IndexedDB), organised into
+> categories, folders and cross-cutting tags. A built-in receipt/document
+> scanner captures paper; on-device OCR (tesseract.js) writes a text sidecar
+> per scanned document so search finds text INSIDE files. Storage backends:
+> this device (default), a local folder (desktop), or Dropbox — the cloud
+> copy is always AES-GCM encrypted, not optionally.
+
+- App: https://niclaslindstedt.github.io/vault/
+- Source: https://github.com/niclaslindstedt/vault
+- Framework: https://github.com/niclaslindstedt/oss-framework
+
+## Features
+
+- Documents and notes with categories, folders inside categories, and tags
+  that bind documents across folders and categories
+- Built-in receipt/document scanner (camera capture)
+- On-device OCR text sidecars — search inside scanned/binary documents
+- Storage: on-device by default; local folder (desktop); encrypted Dropbox
+- Installable offline PWA with update prompts

@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "categories": [
+    {
+      "id": "receipts",
+      "name": "Receipts",
+      "glyph": "receipt",
+      "builtIn": true
+    },
+    {
+      "id": "insurance",
+      "name": "Insurance",
+      "glyph": "umbrella",
+      "builtIn": true
+    }
+  ],
+  "documents": [
+    {
+      "id": "doc-espresso1",
+      "title": "Espresso machine receipt",
+      "category": "receipts",
+      "folder": "Kitchen",
+      "tags": ["Warranty", "House move"],
+      "note": "Bought at the mall; 2-year warranty.",
+      "file": {
+        "name": "scan-20260105-090703.jpg",
+        "mime": "image/jpeg",
+        "size": 482133,
+        "blobId": "blob-a1b2c3d4e5f6",
+        "scanned": true
+      },
+      "sidecar": {
+        "text": "KITCHEN WORLD\nESPRESSO MACHINE DELUXE\nTOTAL 349.00",
+        "source": "ocr",
+        "engine": "tesseract.js",
+        "lang": "eng",
+        "updatedAt": "2026-01-05T09:10:00.000Z"
+      },
+      "createdAt": "2026-01-05T09:07:03.000Z",
+      "updatedAt": "2026-01-05T09:10:00.000Z"
+    },
+    {
+      "id": "doc-homepolicy1",
+      "title": "Home insurance policy",
+      "category": "insurance",
+      "folder": "",
+      "tags": ["House move"],
+      "note": "Policy number 12-3456-78. Renews in May.",
+      "createdAt": "2026-01-02T12:00:00.000Z",
+      "updatedAt": "2026-01-02T12:00:00.000Z"
+    },
+    {
+      "id": "doc-movingnote1",
+      "title": "Moving checklist",
+      "category": "receipts",
+      "folder": "",
+      "tags": ["House move"],
+      "note": "Change address with the bank, forward mail, photograph meter readings.",
+      "favorite": true,
+      "createdAt": "2026-01-01T08:00:00.000Z",
+      "updatedAt": "2026-01-03T18:30:00.000Z"
+    }
+  ]
+}

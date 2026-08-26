@@ -1,0 +1,115 @@
+name: pages
+
+# Deploys the built app to GitHub Pages (the app IS the website — OSS_SPEC
+# §11.2). Serves at https://niclaslindstedt.github.io/vault/, so every build
+# uses the `/vault/` base path.
+#
+# Which ref is served: a `release_ref` passed by release.yml's post-release
+# chain wins; otherwise the highest `v*` semver tag; before the first release
+# exists, main. A push to main therefore keeps serving the released tag once
+# one exists — main lands at `/` only until v0's first release.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  # Allow release.yml to chain into us after a tag is pushed.
+  workflow_call:
+    inputs:
+      release_ref:
+        description: "Tag or sha to build and deploy."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+  # npm ci resolves @niclaslindstedt/oss-framework from GitHub Packages.
+  packages: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Resolve ref to serve
+        id: ref
+        run: |
+          if [ -n "${{ inputs.release_ref }}" ]; then
+            REF="${{ inputs.release_ref }}"
+          else
+            # Highest semver tag, not the nearest reachable one, so a
+            # release cut from an earlier commit still wins.
+            REF=$(git tag --list 'v*' --sort=-v:refname | head -n1)
+          fi
+          if [ -n "$REF" ]; then
+            echo "Serving release ref: $REF"
+            git checkout "$REF"
+          else
+            echo "No release tag yet — serving main."
+          fi
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@niclaslindstedt"
+      - run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build
+        run: npm run build
+        env:
+          VITE_BASE: /vault/
+          # Cloud-sync client identifier. Public (the OAuth flow is PKCE, no
+          # secret), supplied as a repository variable and injected at build
+          # time; unset -> the Dropbox backend is hidden from the picker.
+          VITE_DROPBOX_APP_KEY: ${{ vars.VITE_DROPBOX_APP_KEY }}
+          VITE_DROPBOX_APP_FOLDER: ${{ vars.VITE_DROPBOX_APP_FOLDER }}
+
+      # GitHub Pages serves 404.html for unknown paths; handing it the SPA
+      # shell keeps deep links (e.g. an OAuth redirect carrying ?code=)
+      # working on a project-pages deploy.
+      - name: SPA fallback
+        run: cp dist/index.html dist/404.html
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      # Whichever attempt actually published reports the URL.
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      # GitHub Pages' publish backend intermittently rejects a fresh
+      # deployment while it is still settling the previous one; re-creating
+      # the deployment from the same artifact a moment later succeeds. Retry
+      # once in-job so the deploy is self-healing; a second failure still
+      # fails the job so a genuinely broken deploy is surfaced.
+      - id: deployment
+        uses: actions/deploy-pages@v5
+        continue-on-error: true
+      - name: Wait before retrying a rejected deployment
+        if: steps.deployment.outcome == 'failure'
+        run: sleep 45
+      - id: deployment_retry
+        if: steps.deployment.outcome == 'failure'
+        uses: actions/deploy-pages@v5
