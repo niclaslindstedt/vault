@@ -1,0 +1,51 @@
+name: version-bump
+
+# The release chain's entry point (OSS_SPEC §10.3, first workflow of the
+# two). Manual-only: a maintainer dispatches it with a bump kind (or `auto`,
+# derived from the .changes/unreleased/ fragments), it reports the derived
+# bump for the run log, and chains into the reusable Release workflow —
+# which consumes the fragments, bumps package.json, commits, pushes the
+# `vX.Y.Z` tag, creates the GitHub Release, and redeploys Pages.
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Bump kind. 'auto' derives it from the .changes/unreleased/ fragments (breaking → major, Added/Changed/Removed/Deprecated → minor, Fixed/Security → patch)."
+        required: true
+        default: auto
+        type: choice
+        options: [auto, patch, minor, major]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+  packages: read
+
+jobs:
+  preview:
+    # Surface the semver the fragments imply before the release job runs, so
+    # the dispatch log shows what `auto` resolved to.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - name: Preview derived bump
+        run: |
+          echo "Requested: ${{ inputs.bump }}"
+          echo "Fragment-derived bump: $(node scripts/release/compute-bump.mjs)"
+
+  release:
+    needs: preview
+    uses: ./.github/workflows/release.yml
+    with:
+      bump: ${{ inputs.bump }}
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+      packages: read
+    secrets: inherit

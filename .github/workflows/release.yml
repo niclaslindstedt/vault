@@ -1,0 +1,180 @@
+name: Release
+
+# The release engine (OSS_SPEC §10.3, second workflow in the chain). Normally
+# entered through version-bump.yml, which resolves the semver bump and calls
+# this reusable workflow; direct workflow_dispatch works too. The workflow
+# derives (or receives) the bump, consumes the changeset fragments in
+# .changes/unreleased/ into a new CHANGELOG section, bumps package.json,
+# commits `chore(release): vX.Y.Z` to main, tags vX.Y.Z, creates a GitHub
+# Release, then chains into pages.yml so the new tag is served immediately.
+#
+# `bump` defaults to `auto` — derived from the fragments' front-matter
+# (breaking → major, Added/Changed/Removed/Deprecated → minor,
+# Fixed/Security → patch). `commit` cuts a release from an earlier commit:
+# only the tag is pushed and main is left untouched.
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Semver bump. 'auto' derives it from the .changes/unreleased/ fragments. Pick patch/minor/major to override."
+        required: true
+        type: choice
+        default: auto
+        options:
+          - auto
+          - patch
+          - minor
+          - major
+      commit:
+        description: "Optional commit sha or ref to release from. Defaults to main HEAD."
+        required: false
+        type: string
+        default: ""
+  # version-bump.yml chains into this workflow with the resolved bump.
+  workflow_call:
+    inputs:
+      bump:
+        required: false
+        type: string
+        default: auto
+      commit:
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+  # npm ci resolves @niclaslindstedt/oss-framework from GitHub Packages.
+  packages: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+      tag: ${{ steps.bump.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@niclaslindstedt"
+      - run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify clean working tree
+        run: |
+          if ! git diff --quiet || ! git diff --quiet --cached; then
+            echo "::error::working tree is not clean — refusing to release"
+            git status
+            exit 1
+          fi
+
+      # When `commit` is set, detach onto that commit so the bump, changelog
+      # collation, and build below all run against its tree.
+      - name: Check out target commit
+        if: inputs.commit != ''
+        run: |
+          git checkout --detach "${{ inputs.commit }}"
+          git --no-pager log -1 --oneline
+
+      - name: Reinstall deps for target commit
+        if: inputs.commit != ''
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve bump
+        id: resolve
+        run: |
+          if [ "${{ inputs.bump }}" = "auto" ] || [ -z "${{ inputs.bump }}" ]; then
+            BUMP=$(node scripts/release/compute-bump.mjs)
+            echo "Auto-derived bump from fragments: $BUMP"
+          else
+            BUMP="${{ inputs.bump }}"
+            echo "Using requested bump override: $BUMP"
+          fi
+          echo "bump=$BUMP" >> "$GITHUB_OUTPUT"
+
+      - name: Bump version
+        id: bump
+        run: |
+          # Compute the next version from the highest released tag, not from
+          # package.json — a tag-only release from an explicit `commit` leaves
+          # main's package.json stale, so reconcile to the latest tag first to
+          # keep the version monotonic with what was actually released.
+          LATEST_TAG=$(git tag -l 'v*' --sort=-v:refname | head -n1)
+          if [ -n "$LATEST_TAG" ]; then
+            npm version "${LATEST_TAG#v}" --no-git-tag-version --allow-same-version >/dev/null
+          fi
+          NEW=$(npm version ${{ steps.resolve.outputs.bump }} --no-git-tag-version)
+          echo "version=${NEW#v}" >> "$GITHUB_OUTPUT"
+          echo "tag=$NEW" >> "$GITHUB_OUTPUT"
+          echo "Bumped from ${LATEST_TAG:-package.json} to $NEW"
+
+      - name: Collate changelog
+        run: node scripts/release/collate-changelog.mjs "${{ steps.bump.outputs.version }}"
+
+      - name: Extract release-notes body
+        run: node scripts/release/extract-section.mjs "${{ steps.bump.outputs.version }}" > .release-notes.md
+
+      - name: Sanity build
+        run: npm run build
+        env:
+          # Mirror the deploy env (pages.yml) so this build is representative.
+          VITE_BASE: /vault/
+          VITE_DROPBOX_APP_KEY: ${{ vars.VITE_DROPBOX_APP_KEY }}
+          VITE_DROPBOX_APP_FOLDER: ${{ vars.VITE_DROPBOX_APP_FOLDER }}
+
+      - name: Commit + tag
+        env:
+          TAG: ${{ steps.bump.outputs.tag }}
+          VERSION: ${{ steps.bump.outputs.version }}
+          FROM_COMMIT: ${{ inputs.commit }}
+        run: |
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add package.json package-lock.json CHANGELOG.md .changes/unreleased
+          git commit -m "chore(release): v${VERSION}"
+          git tag -a "$TAG" -m "Release ${TAG}"
+          if [ -z "$FROM_COMMIT" ]; then
+            git push origin HEAD:main
+          else
+            echo "Releasing from ${FROM_COMMIT} — pushing the tag only, leaving main untouched."
+          fi
+          git push origin "$TAG"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.bump.outputs.tag }}" \
+            --title "${{ steps.bump.outputs.tag }}" \
+            --notes-file .release-notes.md
+
+  deploy:
+    # Chain straight into pages.yml so the new tag is served immediately —
+    # without this, deployment would wait for the next push to main.
+    needs: release
+    uses: ./.github/workflows/pages.yml
+    with:
+      release_ref: ${{ needs.release.outputs.tag }}
+    permissions:
+      # A reusable workflow can't be granted fewer permissions than it
+      # requests, so these must match pages.yml's top-level block.
+      contents: read
+      pages: write
+      id-token: write
+      packages: read
+    secrets: inherit
