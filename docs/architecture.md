@@ -86,5 +86,14 @@ reaches the bundle.
 `pwa-plugin.ts` emits a hand-rolled prompt-to-update service worker,
 `manifest.webmanifest`, `version.json`, and `precache-manifest.json` at
 build time; the framework's `usePwaUpdate` + `UpdateToast` own the update
-UX. The cache id derives from the deploy base (`src/app/pwa.ts`) so the
-`/vault/` deploy and any sibling channels never fight over a precache.
+UX. The plugin also emits a per-channel web app manifest: `id`,
+`start_url`, and `scope` are pinned to the absolute deploy base, and each
+channel gets a distinct tile name, so `/`, `/preview/`, and `/branch/`
+install as separate apps.
+
+Because the release/preview/branch channels share one origin (the custom
+domain), each build's base gives it a unique service-worker scope and cache
+id (`src/app/pwa.ts`), and the root release passes `VITE_PWA_IGNORE_PATHS`
+so its worker disowns the sibling channels nested under it (its scope `/`
+is a prefix of `/preview/` and `/branch/`). See
+[configuration](configuration.md#release-channels).
