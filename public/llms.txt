@@ -8,7 +8,7 @@
 > this device (default), a local folder (desktop), or Dropbox — the cloud
 > copy is always AES-GCM encrypted, not optionally.
 
-- App: https://niclaslindstedt.github.io/vault/
+- App: https://vault.niclaslindstedt.se/
 - Source: https://github.com/niclaslindstedt/vault
 - Framework: https://github.com/niclaslindstedt/oss-framework
 

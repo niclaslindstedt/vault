@@ -27,9 +27,46 @@ to `Vault`.
 
 ### `VITE_BASE`
 
-The deploy base path. The Pages workflow sets `/vault/` (GitHub project
-pages); local dev and preview default to `/`. Drives the service-worker
-scope and the precache cache id (see `src/app/pwa.ts`).
+The deploy base path; local dev and preview default to `/`. The site is
+served from the custom domain (`vault.niclaslindstedt.se`); each release
+channel builds at its own base: `/` (release), `/preview/` (main),
+`/branch/` (the on-demand branch slot). Drives asset URLs, the
+service-worker scope, and the precache cache id (see `src/app/pwa.ts`).
+
+### `VITE_PWA_IGNORE_PATHS`
+
+Comma-separated absolute paths the service worker must **disown** — the
+sibling channels nested under this build's base. Only the root release sets
+it (`/preview/,/branch/`); its worker's scope `/` is a prefix of the
+siblings, so without this it would serve the released shell in place of a
+preview/branch page. Unset by default.
+
+## Release channels
+
+The app deploys to three coexisting channels on the custom domain
+(`vault.niclaslindstedt.se`). All three are built by `pages.yml` into a
+single GitHub Pages artifact (`actions/upload-pages-artifact` →
+`actions/deploy-pages`), with each channel merged in at its own subpath:
+
+| Channel | Trigger                                          | Path        | Workflow                    |
+| ------- | ------------------------------------------------ | ----------- | --------------------------- |
+| release | `release.yml` dispatch (chains into `pages.yml`) | `/`         | `release.yml` → `pages.yml` |
+| preview | every commit on `main`                           | `/preview/` | `pages.yml`                 |
+| branch  | `pages.yml` dispatch with a `branch_ref`         | `/branch/`  | `pages.yml`                 |
+
+The production `/` build comes from the highest `v*` tag (empty until the
+first release, when `main` is served at `/` instead). The `/preview/` build
+is the current `main`. The `/branch/` slot is a single, on-demand slot:
+dispatch `pages.yml` with a `branch_ref` to park a branch there, and it
+persists across later deploys via the auto-managed `branch-deploy` orphan
+branch until the next dispatch overwrites it.
+
+Because the channels share one origin, each build gets its own base path
+(so its service-worker scope and precache cache id are unique) and the root
+release lists its siblings in `VITE_PWA_IGNORE_PATHS` so its worker disowns
+their pages. Only the root artifact carries the domain's `CNAME` (from
+`public/`); the per-slot copies strip it so a single root file owns the
+domain.
 
 ## App settings (runtime, per device)
 

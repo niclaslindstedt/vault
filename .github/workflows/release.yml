@@ -132,8 +132,10 @@ jobs:
       - name: Sanity build
         run: npm run build
         env:
-          # Mirror the deploy env (pages.yml) so this build is representative.
-          VITE_BASE: /vault/
+          # Mirror the deploy env (pages.yml's root release build) so this
+          # build is representative.
+          VITE_BASE: /
+          VITE_PWA_IGNORE_PATHS: /preview/,/branch/
           VITE_DROPBOX_APP_KEY: ${{ vars.VITE_DROPBOX_APP_KEY }}
           VITE_DROPBOX_APP_FOLDER: ${{ vars.VITE_DROPBOX_APP_FOLDER }}
 

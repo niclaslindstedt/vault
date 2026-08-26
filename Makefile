@@ -39,10 +39,11 @@ actionlint:
 docs:
 	@echo "see docs/"
 
-# The app IS the website: pages.yml builds it with the Pages base path and
-# deploys dist/. These targets mirror that for local inspection.
+# The app IS the website: pages.yml builds the release channels and deploys
+# dist/ to the custom domain. This mirrors the root release build for local
+# inspection.
 website:
-	VITE_BASE=/vault/ npm run build
+	VITE_BASE=/ VITE_PWA_IGNORE_PATHS=/preview/,/branch/ npm run build
 
 website-dev:
 	npm run dev
